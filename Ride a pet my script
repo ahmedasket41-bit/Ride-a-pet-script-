@@ -1,0 +1,417 @@
+# Ride-a-pet-script-
+
+-- 🎃 EGG FINDER PRO | NO RETURN
+-- LocalScript داخل Roblox Studio
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local UIS = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local previous = playerGui:FindFirstChild("EggFinderPro")
+if previous then previous:Destroy() end
+
+local GREEN = Color3.fromRGB(50, 255, 125)
+local DARK = Color3.fromRGB(17, 22, 32)
+
+local function round(obj, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius)
+    c.Parent = obj
+end
+
+-- الواجهة
+local gui = Instance.new("ScreenGui")
+gui.Name = "EggFinderPro"
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 999
+gui.Parent = playerGui
+
+-- زر فتح القائمة
+local toggle = Instance.new("TextButton")
+toggle.Size = UDim2.fromOffset(58, 58)
+toggle.Position = UDim2.new(0, 18, 0.4, 0)
+toggle.BackgroundColor3 = DARK
+toggle.Text = "🎃"
+toggle.TextSize = 30
+toggle.Parent = gui
+round(toggle, 16)
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = GREEN
+toggleStroke.Thickness = 2
+toggleStroke.Parent = toggle
+
+-- النافذة الرئيسية
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(0.86, 0, 0.66, 0)
+main.Position = UDim2.new(0.07, 0, 0.17, 0)
+main.BackgroundColor3 = DARK
+main.Visible = false
+main.Parent = gui
+round(main, 16)
+
+local sizeLimit = Instance.new("UISizeConstraint")
+sizeLimit.MinSize = Vector2.new(270, 300)
+sizeLimit.MaxSize = Vector2.new(480, 580)
+sizeLimit.Parent = main
+
+local border = Instance.new("UIStroke")
+border.Color = GREEN
+border.Thickness = 1.5
+border.Parent = main
+
+-- رأس القائمة
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 48)
+header.BackgroundColor3 = Color3.fromRGB(29, 39, 52)
+header.Parent = main
+round(header, 14)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -65, 1, 0)
+title.Position = UDim2.fromOffset(8, 0)
+title.BackgroundTransparency = 1
+title.Text = "🎃  EGG FINDER PRO"
+title.TextColor3 = GREEN
+title.TextSize = 17
+title.Font = Enum.Font.GothamBold
+title.Parent = header
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(45, 34)
+close.Position = UDim2.new(1, -49, 0, 7)
+close.BackgroundColor3 = Color3.fromRGB(95, 40, 48)
+close.Text = "---"
+close.TextColor3 = Color3.new(1, 1, 1)
+close.TextSize = 14
+close.Parent = header
+round(close, 8)
+
+-- البحث
+local search = Instance.new("TextBox")
+search.Size = UDim2.new(1, -20, 0, 42)
+search.Position = UDim2.fromOffset(10, 58)
+search.BackgroundColor3 = Color3.fromRGB(31, 39, 53)
+search.PlaceholderText = "اكتب بداية اسم البيضة..."
+search.PlaceholderColor3 = Color3.fromRGB(170, 180, 195)
+search.Text = ""
+search.TextColor3 = Color3.new(1, 1, 1)
+search.TextSize = 15
+search.ClearTextOnFocus = false
+search.Parent = main
+round(search, 10)
+
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -20, 0, 30)
+status.Position = UDim2.fromOffset(10, 103)
+status.BackgroundTransparency = 1
+status.Text = "اكتب أول حرف للبحث"
+status.TextColor3 = GREEN
+status.TextSize = 13
+status.Parent = main
+
+-- النتائج
+local results = Instance.new("ScrollingFrame")
+results.Size = UDim2.new(1, -20, 1, -150)
+results.Position = UDim2.fromOffset(10, 140)
+results.BackgroundColor3 = Color3.fromRGB(22, 28, 39)
+results.BorderSizePixel = 0
+results.ScrollBarThickness = 5
+results.ScrollBarImageColor3 = GREEN
+results.CanvasSize = UDim2.new()
+results.AutomaticCanvasSize = Enum.AutomaticSize.Y
+results.Parent = main
+round(results, 10)
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 5)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = results
+
+local pad = Instance.new("UIPadding")
+pad.PaddingTop = UDim.new(0, 6)
+pad.PaddingLeft = UDim.new(0, 6)
+pad.PaddingRight = UDim.new(0, 6)
+pad.Parent = results
+
+-- فهرس البيض
+local index = {}
+local indexed = {}
+local selectedHighlight
+local selectedTag
+local selectedEggObject
+local searchVersion = 0
+
+local function isEgg(obj)
+    if not (obj:IsA("Model") or obj:IsA("BasePart")) then
+        return false
+    end
+
+    local name = obj.Name:lower()
+    return name:find("egg", 1, true) ~= nil
+        or name:find("بيض", 1, true) ~= nil
+end
+
+local function indexObject(obj)
+    if indexed[obj] or not isEgg(obj) then return end
+    indexed[obj] = true
+    table.insert(index, obj)
+end
+
+local function getPart(obj)
+    if obj:IsA("BasePart") then
+        return obj
+    end
+
+    if obj:IsA("Model") then
+        return obj.PrimaryPart
+            or obj:FindFirstChildWhichIsA("BasePart", true)
+    end
+end
+
+local function clearSelection()
+    if selectedHighlight then
+        selectedHighlight:Destroy()
+    end
+
+    if selectedTag then
+        selectedTag:Destroy()
+    end
+
+    selectedHighlight = nil
+    selectedTag = nil
+    selectedEggObject = nil
+end
+
+-- تحديد البيضة والانتقال إليها دون الرجوع
+local function selectEgg(obj)
+    if not obj or not obj.Parent then return end
+
+    local part = getPart(obj)
+    if not part then
+        status.Text = "لا يوجد جزء قابل للتحديد"
+        return
+    end
+
+    local character = player.Character
+    local root = character
+        and character:FindFirstChild("HumanoidRootPart")
+
+    if not root or not part:IsDescendantOf(Workspace) then
+        status.Text = "تعذر الانتقال إلى البيضة"
+        return
+    end
+
+    clearSelection()
+    selectedEggObject = obj
+
+    -- التحديد الأخضر
+    selectedHighlight = Instance.new("Highlight")
+    selectedHighlight.Adornee = obj
+    selectedHighlight.FillColor = GREEN
+    selectedHighlight.OutlineColor = Color3.new(1, 1, 1)
+    selectedHighlight.FillTransparency = 0.25
+    selectedHighlight.DepthMode =
+        Enum.HighlightDepthMode.AlwaysOnTop
+    selectedHighlight.Parent = Workspace
+
+    -- اسم البيضة
+    selectedTag = Instance.new("BillboardGui")
+    selectedTag.Adornee = part
+    selectedTag.Size = UDim2.fromOffset(180, 38)
+    selectedTag.StudsOffsetWorldSpace = Vector3.new(0, 3, 0)
+    selectedTag.AlwaysOnTop = true
+    selectedTag.Parent = gui
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.fromScale(1, 1)
+    label.BackgroundColor3 = Color3.fromRGB(12, 30, 20)
+    label.BackgroundTransparency = 0.1
+    label.Text = "🥚 " .. obj.Name
+    label.TextColor3 = GREEN
+    label.TextStrokeTransparency = 0.3
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.Parent = selectedTag
+    round(label, 8)
+
+    -- الانتقال للبيضة والبقاء هناك
+    character:PivotTo(
+        CFrame.new(part.Position + Vector3.new(0, 5, 0))
+    )
+
+    status.Text = "وصلت إلى: " .. obj.Name
+end
+
+-- تنظيف النتائج
+local function clearResults()
+    for _, child in ipairs(results:GetChildren()) do
+        if child:IsA("TextButton")
+            or child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+end
+
+-- البحث ببداية الاسم فقط
+local function runSearch()
+    searchVersion += 1
+    local version = searchVersion
+
+    clearResults()
+
+    local query = search.Text:lower():match("^%s*(.-)%s*$")
+
+    if query == "" then
+        status.Text = "اكتب أول حرف للبحث"
+        return
+    end
+
+    status.Text = "جاري البحث..."
+
+    task.spawn(function()
+        local found = 0
+        local checked = 0
+
+        for _, obj in ipairs(index) do
+            if version ~= searchVersion then return end
+            checked += 1
+
+            if obj.Parent
+                and obj.Name:lower():sub(1, #query) == query then
+
+                found += 1
+
+                local button = Instance.new("TextButton")
+                button.Name = "Result" .. found
+                button.LayoutOrder = found
+                button.Size = UDim2.new(1, -4, 0, 40)
+                button.BackgroundColor3 =
+                    Color3.fromRGB(37, 52, 48)
+                button.Text = "🥚  " .. obj.Name
+                button.TextColor3 = GREEN
+                button.TextSize = 14
+                button.Font = Enum.Font.GothamBold
+                button.Parent = results
+                round(button, 8)
+
+                button.Activated:Connect(function()
+                    selectEgg(obj)
+                end)
+
+                if found >= 150 then break end
+            end
+
+            if checked % 100 == 0 then
+                task.wait()
+            end
+        end
+
+        if version ~= searchVersion then return end
+
+        status.Text = found == 0
+            and "لا توجد بيضات تبدأ بهذا النص"
+            or ("عدد النتائج: " .. found)
+    end)
+end
+
+-- فهرسة العناصر على دفعات
+task.spawn(function()
+    local descendants = Workspace:GetDescendants()
+
+    for i, obj in ipairs(descendants) do
+        indexObject(obj)
+        if i % 200 == 0 then task.wait() end
+    end
+
+    status.Text = "اكتب أول حرف للبحث"
+end)
+
+Workspace.DescendantAdded:Connect(function(obj)
+    task.defer(function()
+        if obj.Parent then indexObject(obj) end
+    end)
+end)
+
+Workspace.DescendantRemoving:Connect(function(obj)
+    indexed[obj] = nil
+
+    for i = #index, 1, -1 do
+        if index[i] == obj then
+            table.remove(index, i)
+        end
+    end
+
+    if selectedEggObject == obj then
+        clearSelection()
+    end
+end)
+
+search:GetPropertyChangedSignal("Text"):Connect(runSearch)
+
+toggle.Activated:Connect(function()
+    main.Visible = not main.Visible
+end)
+
+close.Activated:Connect(function()
+    main.Visible = false
+end)
+
+-- سحب الزر والقائمة
+local function makeDraggable(handle, target)
+    local dragging = false
+    local startInput
+    local startPosition
+    local activeInput
+
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch
+            or input.UserInputType == Enum.UserInputType.MouseButton1 then
+
+            dragging = true
+            startInput = input.Position
+            startPosition = target.Position
+            activeInput = input
+        end
+    end)
+
+    UIS.InputChanged:Connect(function(input)
+        if not dragging then return end
+
+        local mouseMove =
+            input.UserInputType == Enum.UserInputType.MouseMovement
+
+        local touchMove =
+            activeInput
+            and activeInput.UserInputType == Enum.UserInputType.Touch
+            and input.UserInputType == Enum.UserInputType.Touch
+
+        if mouseMove or touchMove then
+            local delta = input.Position - startInput
+
+            target.Position = UDim2.new(
+                startPosition.X.Scale,
+                startPosition.X.Offset + delta.X,
+                startPosition.Y.Scale,
+                startPosition.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch
+            or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+            activeInput = nil
+        end
+    end)
+end
+
+makeDraggable(toggle, toggle)
+makeDraggable(header, main)
+
+print("Egg Finder Pro loaded!")
